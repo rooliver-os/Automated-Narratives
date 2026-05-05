@@ -16,7 +16,7 @@ PyTorch model for generating basketball game narratives.
 
 To train the model run:
 
-    python narrative_model_tuned.py --train_csv train_dataset.csv \
+    python PyTorch_Neural.py --train_csv train_dataset.csv \
         --val_csv validation_dataset.csv --epochs 30 --batch_size 16 \
         --teacher_forcing_start 1.0 --teacher_forcing_end 0.5 --teacher_forcing_decay 0.95
 
