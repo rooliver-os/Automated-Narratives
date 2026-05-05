@@ -1,7 +1,3 @@
-from pathlib import Path
-import textwrap
-
-generator_code = r'''
 """
 Davidson Automated Narrative Generator
 -------------------------------------
@@ -30,9 +26,9 @@ from pathlib import Path
 import pandas as pd
 
 
-ANALYTICS_CSV = "Basketball_Training_Dataset.csv"
-SENTENCE_BANK_CSV = "davidson_sentence_bank_v2.csv"
-OUTPUT_CSV = "davidson_training_dataset_with_generated_narratives.csv"
+ANALYTICS_CSV = "Basketball_Training_Dataset(1).csv"
+SENTENCE_BANK_CSV = "sentence_bank.csv"
+OUTPUT_CSV = "Full_Training_data_FIXED.csv"
 
 DAVIDSON_NAME = "Davidson"
 
@@ -274,8 +270,28 @@ def compare(a, op, b):
 # Template filling
 # -----------------------------
 
-def build_placeholder_values(row):
+def build_placeholder_values(row, role=None):
+    """Build placeholder values.
+
+    Important: [REBOUNDS] and [ASSISTS] appear in both player and team
+    templates. Therefore their meaning has to depend on the sentence role.
+    For Body_Player, they refer to the top scorer's player line.
+    For Body_Team_Stat, they refer to Davidson's team totals.
+    """
     opponent = row.get("Opponent", "the opponent")
+
+    player_values = {
+        "REBOUNDS": safe_int(row.get("Top_Scorer_Davidson_Rebounds")),
+        "ASSISTS": safe_int(row.get("Top_Scorer_Davidson_Assists")),
+    }
+    team_values = {
+        "REBOUNDS": safe_int(row.get("Davidson_Rebounds")),
+        "ASSISTS": safe_int(row.get("Davidson_Assists")),
+    }
+
+    # Default to player values unless we are filling a team-stat sentence.
+    ambiguous_values = team_values if role == "Body_Team_Stat" else player_values
+
     values = {
         "DAVIDSON": DAVIDSON_NAME,
         "OPPONENT": opponent,
@@ -284,8 +300,12 @@ def build_placeholder_values(row):
         "RECORD": row.get("Davidson_Record_After", ""),
         "PLAYER": row.get("Top_Scorer_Davidson", "A Davidson standout"),
         "POINTS": safe_int(row.get("Top_Scorer_Davidson_Points")),
-        "REBOUNDS": safe_int(row.get("Top_Scorer_Davidson_Rebounds")),
-        "ASSISTS": safe_int(row.get("Top_Scorer_Davidson_Assists")),
+        "REBOUNDS": ambiguous_values["REBOUNDS"],
+        "ASSISTS": ambiguous_values["ASSISTS"],
+        "PLAYER_REBOUNDS": safe_int(row.get("Top_Scorer_Davidson_Rebounds")),
+        "PLAYER_ASSISTS": safe_int(row.get("Top_Scorer_Davidson_Assists")),
+        "TEAM_REBOUNDS": safe_int(row.get("Davidson_Rebounds")),
+        "TEAM_ASSISTS": safe_int(row.get("Davidson_Assists")),
         "SECOND_PLAYER": row.get("Second_Key_Player_Davidson", "Another Davidson contributor"),
         "SECOND_STATLINE": row.get("Second_Key_Player_Davidson_Statline", "key contributions"),
         "THIRD_PLAYER": row.get("Third_Key_Player_Davidson", "A third Davidson contributor"),
@@ -295,11 +315,9 @@ def build_placeholder_values(row):
         "THREES_MADE": safe_int(row.get("Davidson_3PT_Made")),
         "THREES_ATTEMPTED": safe_int(row.get("Davidson_3PT_Attempted")),
         "FT_PERCENTAGE": safe_num(row.get("Davidson_FT_Percentage")),
-        "ASSISTS": safe_int(row.get("Davidson_Assists")),
         "POINTS_IN_PAINT": safe_int(row.get("Davidson_Points_In_Paint")),
         "FAST_BREAK_POINTS": safe_int(row.get("Davidson_Fast_Break_Points")),
         "SECOND_CHANCE_POINTS": safe_int(row.get("Davidson_Second_Chance_Points")),
-        "REBOUNDS": safe_int(row.get("Davidson_Rebounds")),
         "REBOUND_DIFFERENTIAL": safe_int(row.get("Rebound_Differential")),
         "STEALS": safe_int(row.get("Davidson_Steals")),
         "BLOCKS": safe_int(row.get("Davidson_Blocks")),
@@ -318,8 +336,8 @@ def build_placeholder_values(row):
     return values
 
 
-def fill_template(template, row):
-    values = build_placeholder_values(row)
+def fill_template(template, row, role=None):
+    values = build_placeholder_values(row, role)
 
     def replace_match(match):
         key = match.group(1)
@@ -394,7 +412,7 @@ def choose_sentence(sentence_bank, row, role, used_ids=None):
     top = candidates[candidates["Priority"] == best_priority]
     selected = top.sample(1, random_state=random.randint(0, 999999)).iloc[0]
 
-    sentence = fill_template(selected["Template"], row)
+    sentence = fill_template(selected["Template"], row, role)
     return sentence, selected["Sentence_ID"]
 
 
@@ -475,31 +493,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-'''
-
-code_path = Path("/mnt/data/davidson_narrative_generator.py")
-code_path.write_text(generator_code, encoding="utf-8")
-
-# Also run the generator against the currently uploaded files to produce the output CSV
-import shutil, os, subprocess, sys
-
-workdir = Path("/mnt/data")
-# Ensure expected filenames exist
-assert (workdir / "Basketball_Training_Dataset.csv").exists(), "Analytics CSV missing"
-assert (workdir / "davidson_sentence_bank_v2.csv").exists(), "Sentence bank CSV missing"
-
-result = subprocess.run(
-    [sys.executable, str(code_path)],
-    cwd=str(workdir),
-    capture_output=True,
-    text=True,
-    timeout=60
-)
-
-print(result.stdout)
-if result.stderr:
-    print(result.stderr)
-
-output_csv = workdir / "davidson_training_dataset_with_generated_narratives.csv"
-print(code_path)
-print(output_csv)
